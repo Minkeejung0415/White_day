@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>알림</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --alert-bg: rgba(242, 242, 247, 0.95);
+    --overlay-bg: rgba(0, 0, 0, 0.35);
+    --separator: rgba(60, 60, 67, 0.12);
+    --text-primary: #1c1c1e;
+    --text-secondary: #3c3c43;
+    --btn-text: #007aff;
+    --btn-pressed: rgba(0, 122, 255, 0.08);
+    --alert-radius: 14px;
+    --btn-height: 44px;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #f2f2f7;
+  }
+
+  /* ── Overlay ── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--overlay-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.25s ease forwards;
+  }
+
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+
+  /* ── Alert Box ── */
+  .alert {
+    width: 270px;
+    background: var(--alert-bg);
+    border-radius: var(--alert-radius);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+    overflow: visible;
+    transform: scale(0.95);
+    animation: popIn 0.22s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    position: relative;
+  }
+
+  @keyframes popIn {
+    to { transform: scale(1); }
+  }
+
+  .alert-body {
+    padding: 20px 16px 18px;
+    text-align: center;
+  }
+
+  .alert-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+
+  .alert-message {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    margin-top: 6px;
+  }
+
+  /* ── Button Area ── */
+  .alert-buttons {
+    display: flex;
+    border-top: 0.5px solid var(--separator);
+    position: relative;
+    min-height: var(--btn-height);
+  }
+
+  .alert-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--btn-height);
+    font-size: 17px;
+    color: var(--btn-text);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s;
+    position: relative;
+    z-index: 2;
+    user-select: none;
+    font-family: inherit;
+  }
+
+  .alert-btn:active {
+    background: var(--btn-pressed);
+  }
+
+  .alert-btn-yes {
+    font-weight: 600;
+  }
+
+  .alert-btn-no {
+    font-weight: 400;
+    transition: transform 0.18s cubic-bezier(0.23, 1, 0.32, 1), left 0.18s cubic-bezier(0.23, 1, 0.32, 1), top 0.18s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .btn-separator {
+    width: 0.5px;
+    background: var(--separator);
+    flex-shrink: 0;
+  }
+
+  /* ── Evade: floating No button ── */
+  .alert-btn-no.floating {
+    position: absolute;
+    width: 50%;
+    flex: none;
+  }
+
+  /* ── Shake animation ── */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    15% { transform: translateX(-6px); }
+    30% { transform: translateX(5px); }
+    45% { transform: translateX(-4px); }
+    60% { transform: translateX(3px); }
+    75% { transform: translateX(-2px); }
+  }
+
+  .alert-btn-no.shaking {
+    animation: shake 0.45s ease;
+    pointer-events: none;
+  }
+
+  /* ── Removed gag ── */
+  .removed-text {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--btn-height);
+    font-size: 13px;
+    color: #8e8e93;
+  }
+
+  /* ── Confirmation View ── */
+  .confirm-view {
+    text-align: center;
+    padding: 40px 20px;
+    opacity: 0;
+    animation: fadeIn 0.3s ease 0.05s forwards;
+  }
+
+  .confirm-emoji {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+
+  .confirm-text {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.4;
+    margin-bottom: 24px;
+  }
+
+  .replay-btn {
+    font-size: 15px;
+    color: var(--btn-text);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 8px 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Confetti ── */
+  .confetti-container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2000;
+    overflow: hidden;
+  }
+
+  .confetti-piece {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    top: -20px;
+    opacity: 0;
+    animation: confettiFall linear forwards;
+  }
+
+  @keyframes confettiFall {
+    0%   { opacity: 1; transform: translateY(0) rotate(0deg); }
+    100% { opacity: 0; transform: translateY(100vh) rotate(720deg); }
+  }
+
+  /* ── Reduced Motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    .alert-btn-no {
+      transition: none;
+    }
+    .alert-btn-no.shaking {
+      animation: none;
+    }
+    .confetti-piece {
+      animation: none;
+      display: none;
+    }
+    .alert {
+      animation: none;
+      transform: scale(1);
+    }
+    .overlay, .confirm-view {
+      animation: none;
+      opacity: 1;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="overlay" id="app" role="dialog" aria-modal="true" aria-labelledby="alert-title">
+  <!-- Alert View -->
+  <div class="alert" id="alertView">
+    <div class="alert-body">
+      <div class="alert-title" id="alert-title">남자친구가 이상한걸 보냈다</div>
+      <div class="alert-message">발렌타인데이에는 못만났지만 화이트데이에 같이 데이트 할래?</div>
+    </div>
+    <div class="alert-buttons" id="btnArea">
+      <button class="alert-btn alert-btn-no" id="btnNo" type="button">아니</button>
+      <div class="btn-separator" id="separator"></div>
+      <button class="alert-btn alert-btn-yes" id="btnYes" type="button">응</button>
+    </div>
+  </div>
+
+  <!-- Confirmation View (hidden initially) -->
+  <div class="alert" id="confirmView" style="display:none;">
+    <div class="confirm-view">
+      <div class="confirm-emoji">❤️</div>
+      <div class="confirm-text">우리 화이트데이<br>데이트 확정 ❤️</div>
+      <button class="replay-btn" id="btnReplay" type="button">다시 보기</button>
+    </div>
+  </div>
+</div>
+
+<div class="confetti-container" id="confetti"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── Config ── */
+  var MAX_EVADES = 6;
+
+  /* ── State ── */
+  var STATE_INTRO = "intro";
+  var STATE_EVADE = "evade";
+  var STATE_CONFIRMED = "confirmed";
+
+  var state = STATE_INTRO;
+  var evadeCount = 0;
+
+  /* ── DOM refs ── */
+  var alertView  = document.getElementById("alertView");
+  var confirmView = document.getElementById("confirmView");
+  var btnNo      = document.getElementById("btnNo");
+  var btnYes     = document.getElementById("btnYes");
+  var btnArea    = document.getElementById("btnArea");
+  var separator  = document.getElementById("separator");
+  var btnReplay  = document.getElementById("btnReplay");
+  var confettiEl = document.getElementById("confetti");
+
+  /* ── Evasion modes ── */
+  var MODES = ["move", "swap", "shake"];
+
+  function pickMode() {
+    return MODES[Math.floor(Math.random() * MODES.length)];
+  }
+
+  /* ── Reduced motion check ── */
+  var prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ── Evasion: move ── */
+  function evadeMove() {
+    var area = btnArea.getBoundingClientRect();
+    var btnW = btnNo.offsetWidth;
+    var btnH = btnNo.offsetHeight;
+    var maxX = area.width - btnW;
+    var maxY = Math.max(btnH, 60);
+
+    // Make the No button float absolute within the button area
+    if (!btnNo.classList.contains("floating")) {
+      btnNo.classList.add("floating");
+    }
+
+    var x = Math.random() * maxX;
+    var y = Math.random() * maxY;
+
+    // Keep it from overlapping too much with the Yes button
+    var yesRect = btnYes.getBoundingClientRect();
+    var areaRect = btnArea.getBoundingClientRect();
+    var yesLeft = yesRect.left - areaRect.left;
+    if (Math.abs(x - yesLeft) < btnW * 0.6 && y < btnH * 1.2) {
+      x = (x + btnW) % maxX;
+    }
+
+    btnNo.style.left = x + "px";
+    btnNo.style.top  = y + "px";
+  }
+
+  /* ── Evasion: swap ── */
+  var swapped = false;
+  function evadeSwap() {
+    // Reset floating if active
+    if (btnNo.classList.contains("floating")) {
+      btnNo.classList.remove("floating");
+      btnNo.style.left = "";
+      btnNo.style.top  = "";
+    }
+    if (swapped) {
+      btnArea.insertBefore(btnNo, separator);
+    } else {
+      btnArea.appendChild(btnNo);
+    }
+    swapped = !swapped;
+  }
+
+  /* ── Evasion: shake ── */
+  function evadeShake() {
+    if (btnNo.classList.contains("floating")) {
+      btnNo.classList.remove("floating");
+      btnNo.style.left = "";
+      btnNo.style.top  = "";
+    }
+    btnNo.classList.add("shaking");
+    btnNo.addEventListener("animationend", function handler() {
+      btnNo.classList.remove("shaking");
+      btnNo.removeEventListener("animationend", handler);
+    });
+  }
+
+  /* ── Run evasion ── */
+  function triggerEvade() {
+    evadeCount++;
+
+    if (evadeCount > MAX_EVADES) {
+      // Remove the No button with a gag
+      btnNo.style.display = "none";
+      separator.style.display = "none";
+      var gag = document.createElement("div");
+      gag.className = "removed-text";
+      gag.textContent = "아니 옵션은 삭제됐어 😄";
+      btnArea.insertBefore(gag, btnYes);
+      return;
+    }
+
+    if (prefersReducedMotion) {
+      evadeShake();
+      return;
+    }
+
+    var mode = pickMode();
+    switch (mode) {
+      case "move":  evadeMove();  break;
+      case "swap":  evadeSwap();  break;
+      case "shake": evadeShake(); break;
+    }
+  }
+
+  /* ── Confirmation ── */
+  function showConfirmation() {
+    state = STATE_CONFIRMED;
+    alertView.style.display = "none";
+    confirmView.style.display = "";
+    launchConfetti();
+    tryHaptic();
+  }
+
+  /* ── Haptic ── */
+  function tryHaptic() {
+    if (navigator.vibrate) {
+      navigator.vibrate([30, 50, 30]);
+    }
+  }
+
+  /* ── Confetti ── */
+  function launchConfetti() {
+    confettiEl.innerHTML = "";
+    var colors = ["#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#007aff", "#af52de", "#ff2d55"];
+    var count = 60;
+    for (var i = 0; i < count; i++) {
+      var piece = document.createElement("div");
+      piece.className = "confetti-piece";
+      var color = colors[Math.floor(Math.random() * colors.length)];
+      var size  = 6 + Math.random() * 8;
+      var left  = Math.random() * 100;
+      var delay = Math.random() * 1.2;
+      var dur   = 1.5 + Math.random() * 1.5;
+      var shape = Math.random() > 0.5 ? "50%" : "2px";
+
+      piece.style.cssText =
+        "left:" + left + "%;" +
+        "width:" + size + "px;" +
+        "height:" + size + "px;" +
+        "background:" + color + ";" +
+        "border-radius:" + shape + ";" +
+        "animation-delay:" + delay + "s;" +
+        "animation-duration:" + dur + "s;";
+
+      confettiEl.appendChild(piece);
+    }
+    // Clean up after animation
+    setTimeout(function () { confettiEl.innerHTML = ""; }, 4000);
+  }
+
+  /* ── Reset / Replay ── */
+  function resetAll() {
+    state = STATE_INTRO;
+    evadeCount = 0;
+    swapped = false;
+    confettiEl.innerHTML = "";
+
+    // Restore alert view
+    confirmView.style.display = "none";
+    alertView.style.display = "";
+
+    // Restore No button
+    btnNo.style.display = "";
+    btnNo.classList.remove("floating", "shaking");
+    btnNo.style.left = "";
+    btnNo.style.top  = "";
+    separator.style.display = "";
+
+    // Remove gag text if present
+    var gag = btnArea.querySelector(".removed-text");
+    if (gag) gag.remove();
+
+    // Restore button order: No | separator | Yes
+    btnArea.innerHTML = "";
+    btnArea.appendChild(btnNo);
+    btnArea.appendChild(separator);
+    btnArea.appendChild(btnYes);
+  }
+
+  /* ── Event Listeners ── */
+
+  // Yes button
+  btnYes.addEventListener("click", function () {
+    if (state === STATE_CONFIRMED) return;
+    showConfirmation();
+  });
+
+  // No button click/tap
+  btnNo.addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    if (state === STATE_CONFIRMED) return;
+    state = STATE_EVADE;
+    triggerEvade();
+  });
+
+  // Desktop: proximity evasion for No button
+  btnNo.addEventListener("mouseenter", function () {
+    if (state === STATE_CONFIRMED) return;
+    // Only trigger proximity evasion after first attempt
+    if (evadeCount > 0) {
+      state = STATE_EVADE;
+      triggerEvade();
+    }
+  });
+
+  // Replay
+  btnReplay.addEventListener("click", function () {
+    resetAll();
+  });
+
+  // Handle ?replay=1 query param
+  if (new URLSearchParams(window.location.search).get("replay") === "1") {
+    resetAll();
+  }
+
+})();
+</script>
+</body>
+</html>
